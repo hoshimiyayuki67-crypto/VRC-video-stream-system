@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理面板 - 视频推流系统</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f0f1a; color:#e0e0e0; }
+.container { max-width:900px; margin:0 auto; padding:20px; }
+.card { background:#1a1a2e; border-radius:12px; padding:24px; margin-bottom:20px; border:1px solid #2a2a4a; }
+.card h2 { font-size:18px; margin-bottom:16px; color:#ccc; }
+input, select { padding:8px 12px; background:#16162a; border:1px solid #333; border-radius:6px; color:#fff; font-size:13px; outline:none; }
+input:focus { border-color:#667eea; }
+.btn { padding:8px 20px; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; transition:all .2s; }
+.btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+.btn-primary:hover { opacity:.85; }
+.btn-danger { background:#3a1a1a; color:#ff6b6b; border:1px solid #5a2a2a; }
+.btn-danger:hover { background:#5a2a2a; }
+.btn-sm { padding:4px 10px; font-size:11px; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { text-align:left; padding:10px 8px; color:#888; border-bottom:1px solid #2a2a4a; font-weight:500; }
+td { padding:10px 8px; border-bottom:1px solid #222; }
+tr:hover td { background:#16162a; }
+.badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; }
+.badge-green { background:rgba(74,222,128,0.15); color:#4ade80; }
+.badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
+.badge-yellow { background:rgba(234,179,8,0.15); color:#eab308; }
+.header-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.header-bar h1 { font-size:22px; background:linear-gradient(135deg,#667eea,#764ba2); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.header-bar a { color:#667eea; text-decoration:none; font-size:13px; }
+.header-bar a:hover { text-decoration:underline; }
+.gen-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.gen-row input { width:100px; }
+.code-display { font-family:monospace; font-size:16px; letter-spacing:2px; color:#4ade80; background:#0a0a15; padding:10px 16px; border-radius:6px; display:inline-block; margin-top:8px; }
+.toast { position:fixed; bottom:20px; right:20px; padding:12px 20px; border-radius:8px; color:#fff; font-size:14px; z-index:999; display:none; animation:fadeIn .3s; }
+.toast.success { background:#22c55e; }
+.toast.error { background:#ef4444; }
+.toast.info { background:#667eea; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header-bar">
+    <h1>⚙️ 管理面板</h1>
+    <a href="/">← 返回首页</a>
+  </div>
+
+  <div class="card">
+    <h2>📋 当前推流</h2>
+    <div id="streamList"><p style="color:#666;">加载中...</p></div>
+  </div>
+
+  <div class="card">
+    <h2>👥 用户列表</h2>
+    <div id="userList"><p style="color:#666;">加载中...</p></div>
+  </div>
+
+  <div class="card">
+    <h2>🔑 生成邀请码</h2>
+    <div class="gen-row">
+      <span style="font-size:13px;color:#aaa;">有效期：</span>
+      <input type="number" id="hoursInput" value="24" min="1" max="720">
+      <span style="font-size:13px;color:#aaa;">小时</span>
+      <button class="btn btn-primary" onclick="generateInvite()">生成</button>
+    </div>
+    <div id="newCode" class="hidden" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>📜 邀请码列表</h2>
+    <div id="inviteList"><p style="color:#666;">加载中...</p></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type;
+  t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000);
+}
+
+async function loadAll() {
+  await Promise.all([loadStreams(), loadUsers(), loadInvites()]);
+}
+
+async function loadStreams() {
+  try {
+    const r = await fetch('/api/admin/streams');
+    const d = await r.json();
+    const el = document.getElementById('streamList');
+    const streams = d.active_streams || {};
+    const keys = Object.keys(streams);
+    if (keys.length === 0) { el.innerHTML = '<p style="color:#666;">暂无活跃推流</p>'; return; }
+    let h = '<table><tr><th>用户</th><th>文件</th><th>开始时间</th><th>直播地址</th></tr>';
+    keys.forEach(k => {
+      h += '<tr><td>' + k + '</td><td>' + streams[k].filename + '</td><td>' + streams[k].started_at + '</td><td><a href="' + streams[k].stream_url + '" target="_blank" style="color:#667eea;font-size:12px;">观看</a></td></tr>';
+    });
+    h += '</table>';
+    el.innerHTML = h;
+  } catch(e) {}
+}
+
+async function loadUsers() {
+  try {
+    const r = await fetch('/api/admin/users');
+    const d = await r.json();
+    const el = document.getElementById('userList');
+    if (!d.users || d.users.length === 0) { el.innerHTML = '<p style="color:#666;">暂无用户</p>'; return; }
+    let h = '<table><tr><th>ID</th><th>UID</th><th>角色</th><th>注册时间</th></tr>';
+    d.users.forEach(u => {
+      h += '<tr><td>' + u.id + '</td><td>' + u.uid + (u.uid==='admin'?' ⭐':'') + '</td><td><span class="badge ' + (u.role==='admin'?'badge-yellow':'badge-green') + '">' + u.role + '</span></td><td>' + u.created_at + '</td></tr>';
+    });
+    h += '</table>';
+    el.innerHTML = h;
+  } catch(e) {}
+}
+
+async function loadInvites() {
+  try {
+    const r = await fetch('/api/admin/invite/list');
+    const d = await r.json();
+    const el = document.getElementById('inviteList');
+    if (!d.invites || d.invites.length === 0) { el.innerHTML = '<p style="color:#666;">暂无邀请码</p>'; return; }
+    let h = '<table><tr><th>邀请码</th><th>创建者</th><th>过期时间</th><th>状态</th><th>使用者</th><th>操作</th></tr>';
+    d.invites.forEach(v => {
+      let status = '<span class="badge badge-green">有效</span>';
+      if (v.used_by) status = '<span class="badge" style="background:rgba(100,100,100,0.15);color:#888;">已使用</span>';
+      else if (v.expired) status = '<span class="badge badge-red">已过期</span>';
+      h += '<tr><td style="font-family:monospace;letter-spacing:1px;">' + v.code + '</td><td>' + v.created_by + '</td><td>' + v.expires_at + '</td><td>' + status + '</td><td>' + (v.used_by||'-') + '</td><td><button class="btn btn-danger btn-sm" onclick="deleteInvite(' + v.id + ')">删除</button></td></tr>';
+    });
+    h += '</table>';
+    el.innerHTML = h;
+  } catch(e) {}
+}
+
+async function generateInvite() {
+  const hours = document.getElementById('hoursInput').value || 24;
+  try {
+    const r = await fetch('/api/admin/invite/generate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hours:parseInt(hours)})});
+    const d = await r.json();
+    if (d.success) {
+      document.getElementById('newCode').innerHTML = '<p style="font-size:13px;color:#aaa;">新邀请码（有效期至 ' + d.expires_at + '）：</p><div class="code-display">' + d.code + '</div>';
+      document.getElementById('newCode').classList.remove('hidden');
+      showToast('邀请码已生成！', 'success');
+      loadInvites();
+    } else showToast(d.error, 'error');
+  } catch(e) { showToast('错误', 'error'); }
+}
+
+async function deleteInvite(id) {
+  if (!confirm('确定删除此邀请码？')) return;
+  await fetch('/api/admin/invite/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})});
+  loadInvites();
+}
+
+loadAll();
+setInterval(loadStreams, 5000);
+</script>
+</body>
+</html>
