@@ -8,69 +8,48 @@ on:
 
 permissions:
   contents: write
-  actions: read
-
-on:
-  push:
-    tags:
-      - 'v*'           # 推送 v1.0.0-windows 等标签时触发
-  workflow_dispatch:   # 也支持手动触发
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Setup Python 3.12
-        uses: actions/setup-python@v5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install flask flask-cors pywebview pyinstaller
+      - run: pip install flask flask-cors pywebview pyinstaller
 
       - name: Download MediaMTX
         shell: powershell
         run: |
-          $mtxVersion = "1.19.2"
           $binDir = "windows/bin"
           New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-          Write-Host "Downloading MediaMTX..."
-          Invoke-WebRequest -Uri "https://gitcode.com/GitHub_Trending/me/mediamtx/releases/download/v$mtxVersion/mediamtx_v${mtxVersion}_windows_amd64.zip" -OutFile "mediamtx.zip" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://gitcode.com/GitHub_Trending/me/mediamtx/releases/download/v1.19.2/mediamtx_v1.19.2_windows_amd64.zip" -OutFile "mediamtx.zip" -UseBasicParsing
           Expand-Archive -Path "mediamtx.zip" -DestinationPath $binDir -Force
           Remove-Item "mediamtx.zip" -Force
           Get-ChildItem $binDir -Recurse -Filter "mediamtx.exe" | Move-Item -Destination $binDir -Force
-          Write-Host "MediaMTX downloaded"
 
       - name: Download FFmpeg
         shell: powershell
         run: |
           $binDir = "windows/bin"
-          Write-Host "Downloading FFmpeg..."
           Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip" -UseBasicParsing
           Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp" -Force
           Get-ChildItem "ffmpeg_temp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1 | Copy-Item -Destination "$binDir/ffmpeg.exe"
           Remove-Item "ffmpeg.zip" -Force
           Remove-Item "ffmpeg_temp" -Recurse -Force -ErrorAction SilentlyContinue
-          Write-Host "FFmpeg downloaded"
 
-      - name: Build EXE with PyInstaller
+      - name: Build EXE
         shell: powershell
-        run: |
-          cd windows
-          python build.py
+        run: cd windows; python build.py
 
       - name: Upload EXE to Release
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
         with:
           files: windows/dist/VRCStream.exe
-          fail_on_unmatched_files: false
 
       - name: Upload EXE as Artifact
         uses: actions/upload-artifact@v4
