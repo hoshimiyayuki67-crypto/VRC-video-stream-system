@@ -36,7 +36,7 @@ jobs:
         shell: powershell
         run: |
           $binDir = "windows/bin"
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip" -OutFile "ffmpeg.zip" -UseBasicParsing
           Expand-Archive -Path "ffmpeg.zip" -DestinationPath "ffmpeg_temp" -Force
           Get-ChildItem "ffmpeg_temp" -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1 | Copy-Item -Destination "$binDir/ffmpeg.exe"
           Remove-Item "ffmpeg.zip" -Force
