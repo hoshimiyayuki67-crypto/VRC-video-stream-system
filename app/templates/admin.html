@@ -77,6 +77,14 @@ tr:hover td { background:#16162a; }
 <div class="toast" id="toast"></div>
 
 <script>
+const HLS_BASE = "{{ hls_base|safe }}";
+
+function esc(str) {
+  const div = document.createElement('div');
+  div.appendChild(document.createTextNode(str));
+  return div.innerHTML;
+}
+
 function showToast(msg, type) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.className = 'toast ' + type;
@@ -97,7 +105,7 @@ async function loadStreams() {
     if (keys.length === 0) { el.innerHTML = '<p style="color:#666;">暂无活跃推流</p>'; return; }
     let h = '<table><tr><th>用户</th><th>文件</th><th>开始时间</th><th>直播地址</th></tr>';
     keys.forEach(k => {
-      h += '<tr><td>' + k + '</td><td>' + streams[k].filename + '</td><td>' + streams[k].started_at + '</td><td><a href="' + streams[k].stream_url + '" target="_blank" style="color:#667eea;font-size:12px;">观看</a></td></tr>';
+      h += '<tr><td>' + esc(k) + '</td><td>' + esc(streams[k].filename) + '</td><td>' + esc(streams[k].started_at) + '</td><td><a href="' + esc(streams[k].stream_url) + '" target="_blank" style="color:#667eea;font-size:12px;">观看</a></td></tr>';
     });
     h += '</table>';
     el.innerHTML = h;
@@ -112,7 +120,7 @@ async function loadUsers() {
     if (!d.users || d.users.length === 0) { el.innerHTML = '<p style="color:#666;">暂无用户</p>'; return; }
     let h = '<table><tr><th>ID</th><th>UID</th><th>角色</th><th>注册时间</th></tr>';
     d.users.forEach(u => {
-      h += '<tr><td>' + u.id + '</td><td>' + u.uid + (u.uid==='admin'?' ⭐':'') + '</td><td><span class="badge ' + (u.role==='admin'?'badge-yellow':'badge-green') + '">' + u.role + '</span></td><td>' + u.created_at + '</td></tr>';
+      h += '<tr><td>' + u.id + '</td><td>' + esc(u.uid) + (u.uid==='admin'?' ⭐':'') + '</td><td><span class="badge ' + (u.role==='admin'?'badge-yellow':'badge-green') + '">' + esc(u.role) + '</span></td><td>' + esc(u.created_at || '') + '</td></tr>';
     });
     h += '</table>';
     el.innerHTML = h;
@@ -130,7 +138,7 @@ async function loadInvites() {
       let status = '<span class="badge badge-green">有效</span>';
       if (v.used_by) status = '<span class="badge" style="background:rgba(100,100,100,0.15);color:#888;">已使用</span>';
       else if (v.expired) status = '<span class="badge badge-red">已过期</span>';
-      h += '<tr><td style="font-family:monospace;letter-spacing:1px;">' + v.code + '</td><td>' + v.created_by + '</td><td>' + v.expires_at + '</td><td>' + status + '</td><td>' + (v.used_by||'-') + '</td><td><button class="btn btn-danger btn-sm" onclick="deleteInvite(' + v.id + ')">删除</button></td></tr>';
+      h += '<tr><td style="font-family:monospace;letter-spacing:1px;">' + esc(v.code) + '</td><td>' + esc(v.created_by) + '</td><td>' + esc(v.expires_at) + '</td><td>' + status + '</td><td>' + esc(v.used_by||'-') + '</td><td><button class="btn btn-danger btn-sm" onclick="deleteInvite(' + v.id + ')">删除</button></td></tr>';
     });
     h += '</table>';
     el.innerHTML = h;
@@ -143,7 +151,7 @@ async function generateInvite() {
     const r = await fetch('/api/admin/invite/generate', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({hours:parseInt(hours)})});
     const d = await r.json();
     if (d.success) {
-      document.getElementById('newCode').innerHTML = '<p style="font-size:13px;color:#aaa;">新邀请码（有效期至 ' + d.expires_at + '）：</p><div class="code-display">' + d.code + '</div>';
+      document.getElementById('newCode').innerHTML = '<p style="font-size:13px;color:#aaa;">新邀请码（有效期至 ' + esc(d.expires_at) + '）：</p><div class="code-display">' + esc(d.code) + '</div>';
       document.getElementById('newCode').classList.remove('hidden');
       showToast('邀请码已生成！', 'success');
       loadInvites();

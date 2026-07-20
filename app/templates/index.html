@@ -34,7 +34,7 @@ input:focus { border-color:#667eea; }
 .status-dot { width:10px; height:10px; border-radius:50%; background:#666; }
 .status-dot.active { background:#4ade80; box-shadow:0 0 8px rgba(74,222,128,0.4); }
 .status-text { font-size:14px; color:#aaa; }
-.stream-url { font-size:12px; color:#667eea; word-break:break-all; }
+.stream-url { font-size:12px; color:#667eea; word-break:break-all; cursor:pointer; }
 .empty-state { text-align:center; padding:30px; color:#666; }
 .empty-state .icon { font-size:40px; margin-bottom:8px; }
 .toast { position:fixed; bottom:20px; right:20px; padding:12px 20px; border-radius:8px; color:#fff; font-size:14px; z-index:999; display:none; animation:fadeIn .3s; }
@@ -96,7 +96,7 @@ input:focus { border-color:#667eea; }
     <div class="status-bar" id="statusBar">
       <div class="status-dot" id="statusDot"></div>
       <span class="status-text" id="statusText">当前无推流</span>
-      <span class="stream-url" id="streamUrl"></span>
+      <span class="stream-url" id="streamUrl" onclick="copyStreamUrl()"></span>
     </div>
   </div>
 
@@ -123,8 +123,12 @@ input:focus { border-color:#667eea; }
 <div class="toast" id="toast"></div>
 
 <script>
-const HLS_BASE = window.location.protocol + "//" + window.location.hostname + ":8888/vrcstream";
+// 从服务端注入（Jinja2 模板变量）
+const HLS_BASE = "{{ hls_base|safe }}";
 let currentStream = null;
+let currentUid = null;      // 当前登录用户 UID（不从 DOM 解析）
+let currentRole = null;
+let _refreshInterval = null; // 防止重复 setInterval
 
 function showToast(msg, type) {
   const t = document.getElementById('toast');
@@ -174,23 +178,30 @@ async function doLogout() {
   await fetch('/api/auth/logout', {method:'POST'});
   document.getElementById('mainPage').classList.add('hidden');
   document.getElementById('loginPage').classList.remove('hidden');
+  if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; }
+  currentUid = null;
+  currentRole = null;
   showToast('已退出', 'info');
 }
 
 async function initApp(uid, role) {
+  currentUid = uid;
+  currentRole = role;
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('mainPage').classList.remove('hidden');
   document.getElementById('userDisplay').textContent = uid + (role === 'admin' ? ' (管理员)' : '');
   if (role === 'admin') document.getElementById('adminBtn').style.display = 'inline';
   loadVideos();
-  setInterval(loadVideos, 5000);
+  // 清除旧定时器，防止内存泄漏
+  if (_refreshInterval) clearInterval(_refreshInterval);
+  _refreshInterval = setInterval(loadVideos, 5000);
 }
 
 // Check session on load
 (async function() {
   try {
     const r = await fetch('/api/auth/me');
-    if (r.ok) { const d = await r.json(); initApp(d.uid, d.role); }
+    if (r.ok) { const d = await r.json(); if (d.uid) initApp(d.uid, d.role); }
   } catch(e) {}
 })();
 
@@ -211,10 +222,11 @@ function handleUpload(file) {
   xhr.open('POST', '/api/upload', true);
   xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded/e.total*100); document.getElementById('progressFill').style.width = p+'%'; document.getElementById('progressText').textContent = p+'%'; } };
   xhr.onload = function() {
-    if (xhr.status === 200) { document.getElementById('progressFill').style.width = '100%'; document.getElementById('progressText').textContent = '完成！'; showToast('上传成功', 'success'); setTimeout(()=>document.getElementById('uploadProgress').classList.add('hidden'),1500); loadVideos(); }
-    else showToast('上传失败', 'error');
+    document.getElementById('uploadProgress').classList.add('hidden');
+    if (xhr.status === 200) { showToast('上传成功', 'success'); loadVideos(); }
+    else { try { showToast(JSON.parse(xhr.responseText).error || '上传失败', 'error'); } catch(e) { showToast('上传失败', 'error'); } }
   };
-  xhr.onerror = () => showToast('网络错误', 'error');
+  xhr.onerror = function() { document.getElementById('uploadProgress').classList.add('hidden'); showToast('网络错误', 'error'); };
   xhr.send(fd);
 }
 
@@ -234,10 +246,14 @@ function renderVideos(videos) {
   let h = '';
   videos.forEach(v => {
     const isCur = v.name === currentStream;
-    h += '<div class="video-item"><div class="video-info"><div class="name">' + v.name + (isCur?'<span class="stream-badge">正在推流</span>':'') + '</div><div class="meta">' + v.size + ' · ' + v.modified + '</div></div><div class="video-actions">';
+    // name_escaped 已由服务端 HTML 转义，安全拼接
+    const safeName = v.name_escaped || v.name;
+    const safeSize = v.size || '';
+    const safeModified = v.modified || '';
+    h += '<div class="video-item"><div class="video-info"><div class="name">' + safeName + (isCur?'<span class="stream-badge">正在推流</span>':'') + '</div><div class="meta">' + safeSize + ' · ' + safeModified + '</div></div><div class="video-actions">';
     if (isCur) h += '<button class="btn btn-stream active btn-sm" onclick="stopStream()">⏹ 停止</button>';
-    else h += '<button class="btn btn-stream btn-sm" onclick="startStream(\'' + v.name.replace(/'/g,"\\'") + '\')">📡 推流</button>';
-    h += '<button class="btn-del btn-sm" onclick="deleteVideo(\'' + v.name.replace(/'/g,"\\'") + '\')">🗑</button></div></div>';
+    else h += '<button class="btn btn-stream btn-sm" onclick="startStream(\'' + safeName.replace(/'/g,"\\'") + '\')">📡 推流</button>';
+    h += '<button class="btn-del btn-sm" onclick="deleteVideo(\'' + safeName.replace(/'/g,"\\'") + '\')">🗑</button></div></div>';
   });
   el.innerHTML = h;
 }
@@ -266,12 +282,11 @@ async function deleteVideo(fn) {
 
 function copyStreamUrl() {
   const el = document.getElementById('streamUrl');
-  const url = el.textContent.trim();
+  const url = el.textContent.replace('📺 ', '').trim();
   if (url && url.startsWith('http')) {
     navigator.clipboard.writeText(url).then(() => {
       showToast('📋 已复制直播地址！', 'success');
     }).catch(() => {
-      // Fallback
       const ta = document.createElement('textarea');
       ta.value = url;
       document.body.appendChild(ta);
@@ -287,7 +302,7 @@ function updateStatus(sn) {
   if (sn) {
     document.getElementById('statusDot').className = 'status-dot active';
     document.getElementById('statusText').textContent = '正在推流: ' + sn;
-    document.getElementById('streamUrl').textContent = '📺 ' + HLS_BASE + '/' + document.getElementById('userDisplay').textContent.split(' ')[0] + '/index.m3u8';
+    document.getElementById('streamUrl').textContent = '📺 ' + HLS_BASE + '/' + currentUid + '/index.m3u8';
   } else {
     document.getElementById('statusDot').className = 'status-dot inactive';
     document.getElementById('statusText').textContent = '当前无推流';

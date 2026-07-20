@@ -1,13 +1,27 @@
-import os, time, json, secrets, string, sqlite3, hashlib, subprocess
+import os, time, json, secrets, string, sqlite3, hashlib, subprocess, threading
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from functools import wraps
-import threading
+import html
 
 app = Flask(__name__)
-app.secret_key = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(64))
+
+# 持久化 secret_key，避免重启后 session 失效
+SECRET_KEY_FILE = "/home/yuki/vd/secret_key"
+def load_or_create_secret_key():
+    try:
+        with open(SECRET_KEY_FILE, "r") as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        key = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(64))
+        os.makedirs(os.path.dirname(SECRET_KEY_FILE), exist_ok=True)
+        with open(SECRET_KEY_FILE, "w") as f:
+            f.write(key)
+        return key
+
+app.secret_key = load_or_create_secret_key()
 CORS(app, supports_credentials=True)
 
 BASE_DIR = "/home/yuki/vd"
@@ -17,35 +31,42 @@ HLS_BASE = f"http://{os.environ.get('DOMAIN', 'localhost')}:{os.environ.get('HLS
 os.makedirs(BASE_DIR, exist_ok=True)
 
 streams = {}
+streams_lock = threading.Lock()
 
 # 非管理员限制
 NONADMIN_MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024  # 2GB
 NONADMIN_MAX_TOTAL_SIZE = 5 * 1024 * 1024 * 1024  # 5GB
-NONADMIN_STREAM_MAX_HOURS = 4  # 4小时自动停止
+NONADMIN_STREAM_MAX_HOURS = 4
 
 def check_expired_streams():
+    """后台线程：每分钟检查过期推流"""
     while True:
-        now = time.time()
-        to_stop = []
-        for uid, info in list(streams.items()):
-            if info["process"].poll() is not None:
-                to_stop.append(uid)
-                continue
-            # Check if non-admin and expired
+        try:
+            now = time.time()
+            to_stop = []
+            # 批量获取所有非管理员 UID
             db = get_db()
-            cur = db.execute("SELECT role FROM users WHERE uid=?", (uid,))
-            u = cur.fetchone()
+            admin_uid = None
+            cur = db.execute("SELECT uid FROM users WHERE role='admin'")
+            admins = {r["uid"] for r in cur.fetchall()}
             db.close()
-            if u and u["role"] != "admin":
-                started = datetime.strptime(info["started_at"], "%Y-%m-%d %H:%M:%S")
-                elapsed = (datetime.now() - started).total_seconds()
-                if elapsed > NONADMIN_STREAM_MAX_HOURS * 3600:
-                    to_stop.append(uid)
-        for uid in to_stop:
-            stop_user(uid)
-        time.sleep(60)  # 每分钟检查一次
 
-# 启动后台检查线程
+            with streams_lock:
+                for uid, info in list(streams.items()):
+                    if info["process"].poll() is not None:
+                        to_stop.append(uid)
+                        continue
+                    if uid not in admins:
+                        started = datetime.strptime(info["started_at"], "%Y-%m-%d %H:%M:%S")
+                        elapsed = (datetime.now() - started).total_seconds()
+                        if elapsed > NONADMIN_STREAM_MAX_HOURS * 3600:
+                            to_stop.append(uid)
+            for uid in to_stop:
+                stop_user(uid)
+        except Exception:
+            pass  # 异常不退出线程
+        time.sleep(60)
+
 t = threading.Thread(target=check_expired_streams, daemon=True)
 t.start()
 
@@ -56,17 +77,39 @@ def get_db():
 
 def init_db():
     db = get_db()
-    db.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now','localtime')))")
+    db.execute("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, salt TEXT, role TEXT DEFAULT 'user', created_at TEXT DEFAULT (datetime('now','localtime')))")
     db.execute("CREATE TABLE IF NOT EXISTS invite_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, created_by TEXT NOT NULL, expires_at TEXT NOT NULL, used_by TEXT, used_at TEXT)")
-    # 管理员账号由安装脚本创建
+    # 兼容旧表：如果缺少 salt 列则添加
+    try:
+        db.execute("SELECT salt FROM users LIMIT 0")
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE users ADD COLUMN salt TEXT")
     db.commit()
     db.close()
 
 init_db()
 
-def hash_pw(pw):
+# === 密码哈希（加盐 PBKDF2，兼容旧 SHA256） ===
+def hash_pw(pw, salt=None):
+    """生成加盐哈希，返回 (hash, salt)"""
+    if salt is None:
+        salt = secrets.token_hex(16)
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt.encode(), 100000)
+    return h.hex(), salt
+
+def hash_pw_legacy(pw):
+    """旧版 SHA256（向后兼容）"""
     return hashlib.sha256(pw.encode()).hexdigest()
 
+def verify_pw(pw, stored_hash, salt):
+    """验证密码，兼容旧格式"""
+    if salt:
+        h, _ = hash_pw(pw, salt)
+        return h == stored_hash
+    else:
+        return hash_pw_legacy(pw) == stored_hash
+
+# === 装饰器 ===
 def login_required(f):
     @wraps(f)
     def wrap(*a, **kw):
@@ -100,6 +143,10 @@ def get_user_total_size(uid):
                 total += os.path.getsize(fp)
     return total
 
+def e(text):
+    """HTML 转义"""
+    return html.escape(str(text), quote=True)
+
 # ===== Auth =====
 @app.route("/api/auth/register", methods=["POST"])
 def register():
@@ -127,7 +174,8 @@ def register():
     if cur.fetchone():
         db.close()
         return jsonify({"error":"ID already taken"}), 400
-    db.execute("INSERT INTO users (uid, password_hash) VALUES (?, ?)", (uid, hash_pw(pw)))
+    pw_hash, pw_salt = hash_pw(pw)
+    db.execute("INSERT INTO users (uid, password_hash, salt) VALUES (?, ?, ?)", (uid, pw_hash, pw_salt))
     db.execute("UPDATE invite_codes SET used_by=?, used_at=datetime('now','localtime') WHERE code=?", (uid, code))
     db.commit()
     db.close()
@@ -142,9 +190,15 @@ def login():
     db = get_db()
     cur = db.execute("SELECT * FROM users WHERE uid=?", (uid,))
     u = cur.fetchone()
-    db.close()
-    if not u or u["password_hash"] != hash_pw(pw):
+    if not u or not verify_pw(pw, u["password_hash"], u["salt"]):
+        db.close()
         return jsonify({"error":"Wrong ID or password"}), 401
+    # 自动升级旧密码格式
+    if not u["salt"]:
+        new_hash, new_salt = hash_pw(pw)
+        db.execute("UPDATE users SET password_hash=?, salt=? WHERE uid=?", (new_hash, new_salt, uid))
+        db.commit()
+    db.close()
     session["uid"] = u["uid"]
     session["role"] = u["role"]
     return jsonify({"success":True, "uid":u["uid"], "role":u["role"]})
@@ -160,12 +214,20 @@ def auth_me():
         return jsonify({"uid":session["uid"],"role":session["role"]})
     return jsonify({"uid":None}), 401
 
+# ===== Config API（前端获取动态配置） =====
+@app.route("/api/config")
+def api_config():
+    return jsonify({"hls_base": HLS_BASE, "hls_port": os.environ.get("HLS_PORT", "8888")})
+
 # ===== Admin Invite Codes =====
 @app.route("/api/admin/invite/generate", methods=["POST"])
 @admin_required
 def gen_invite():
     d = request.get_json()
-    hours = int(d.get("hours", 24))
+    try:
+        hours = int(d.get("hours", 24))
+    except (ValueError, TypeError):
+        return jsonify({"error":"Hours must be a number"}), 400
     if hours < 1 or hours > 720:
         return jsonify({"error":"1-720 hours"}), 400
     code = ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8))
@@ -211,9 +273,10 @@ def list_users():
 @admin_required
 def admin_streams():
     active = {}
-    for uid, info in streams.items():
-        if info["process"].poll() is None:
-            active[uid] = {"filename":info["filename"],"started_at":info["started_at"],"stream_url":f"{HLS_BASE}/{uid}/index.m3u8"}
+    with streams_lock:
+        for uid, info in streams.items():
+            if info["process"].poll() is None:
+                active[uid] = {"filename":info["filename"],"started_at":info["started_at"],"stream_url":f"{HLS_BASE}/{uid}/index.m3u8"}
     return jsonify({"active_streams":active})
 
 # ===== Videos =====
@@ -227,15 +290,21 @@ def user_videos(uid):
         for f in sorted(os.listdir(d), reverse=True):
             fp = os.path.join(d, f)
             if os.path.isfile(fp) and allowed_file(f):
-                videos.append({"name":f,"size":f"{os.path.getsize(fp)/1024/1024:.1f} MB","modified":time.strftime("%Y-%m-%d %H:%M:%S",time.localtime(os.path.getmtime(fp)))})
+                videos.append({
+                    "name": f,
+                    "name_escaped": e(f),  # 前端安全渲染
+                    "size": f"{os.path.getsize(fp)/1024/1024:.1f} MB",
+                    "modified": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(os.path.getmtime(fp)))
+                })
     return videos
 
 @app.route("/api/videos")
 @login_required
 def api_videos():
     uid = session["uid"]
-    us = streams.get(uid)
-    cur = us["filename"] if us and us["process"].poll() is None else None
+    with streams_lock:
+        us = streams.get(uid)
+        cur = us["filename"] if us and us["process"].poll() is None else None
     return jsonify({"videos":user_videos(uid),"current_stream":cur,"stream_path":f"vrcstream/{uid}"})
 
 @app.route("/api/upload", methods=["POST"])
@@ -248,26 +317,22 @@ def upload_file():
     if f.filename == "":
         return jsonify({"error":"No file selected"}), 400
     if f and allowed_file(f.filename):
-        # Check admin status
         db = get_db()
         cur = db.execute("SELECT role FROM users WHERE uid=?", (uid,))
         u = cur.fetchone()
         db.close()
         is_admin = u and u["role"] == "admin"
-        
+
         if not is_admin:
-            # 检查单文件大小上限
             f.seek(0, os.SEEK_END)
             file_size = f.tell()
             f.seek(0)
             if file_size > NONADMIN_MAX_FILE_SIZE:
                 return jsonify({"error":"单文件不能超过2GB"}), 400
-            
-            # 检查总容量上限
             total = get_user_total_size(uid)
             if total + file_size > NONADMIN_MAX_TOTAL_SIZE:
                 return jsonify({"error":"总容量已超过5GB上限，无法上传"}), 400
-        
+
         fn = secure_filename(f.filename)
         base, ext = os.path.splitext(fn)
         c = 1
@@ -287,21 +352,26 @@ def delete_video():
     fn = d.get("filename","")
     fp = os.path.join(user_dir(uid), fn)
     if os.path.exists(fp):
-        if uid in streams and streams[uid]["filename"] == fn:
-            stop_user(uid)
+        with streams_lock:
+            if uid in streams and streams[uid]["filename"] == fn:
+                stop_user(uid)
         os.remove(fp)
         return jsonify({"success":True})
     return jsonify({"error":"Not found"}), 404
 
 # ===== Stream =====
 def stop_user(uid):
-    if uid in streams:
-        p = streams[uid]["process"]
-        if p and p.poll() is None:
-            p.terminate()
-            try: p.wait(timeout=5)
-            except: p.kill()
-        del streams[uid]
+    """停止指定用户的推流（线程安全）"""
+    with streams_lock:
+        if uid in streams:
+            p = streams[uid]["process"]
+            if p and p.poll() is None:
+                p.terminate()
+                try:
+                    p.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    p.kill()
+            del streams[uid]
 
 @app.route("/api/stream/start", methods=["POST"])
 @login_required
@@ -316,9 +386,12 @@ def start_stream():
         return jsonify({"error":"File not found"}), 404
     stop_user(uid)
     rtmp = f"{MEDIAMTX_RTMP}/{uid}"
-    proc = subprocess.Popen(["ffmpeg","-re","-stream_loop","-1","-i",fp,"-c","copy","-f","flv",rtmp],
-                            stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
-    streams[uid] = {"process":proc,"filename":fn,"started_at":time.strftime("%Y-%m-%d %H:%M:%S")}
+    proc = subprocess.Popen(
+        ["ffmpeg","-re","-stream_loop","-1","-i",fp,"-c","copy","-f","flv",rtmp],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+    with streams_lock:
+        streams[uid] = {"process":proc,"filename":fn,"started_at":time.strftime("%Y-%m-%d %H:%M:%S")}
     return jsonify({"success":True,"message":f"Streaming: {fn}","stream_url":f"{HLS_BASE}/{uid}/index.m3u8"})
 
 @app.route("/api/stream/stop", methods=["POST"])
@@ -331,19 +404,25 @@ def stop_stream():
 @login_required
 def stream_status():
     uid = session["uid"]
-    us = streams.get(uid)
-    on = us and us["process"].poll() is None
-    return jsonify({"is_streaming":on,"current_stream":us["filename"] if on else None,"stream_url":f"{HLS_BASE}/{uid}/index.m3u8" if on else None,"stream_path":f"vrcstream/{uid}"})
+    with streams_lock:
+        us = streams.get(uid)
+        on = us and us["process"].poll() is None
+    return jsonify({
+        "is_streaming": on,
+        "current_stream": us["filename"] if on else None,
+        "stream_url": f"{HLS_BASE}/{uid}/index.m3u8" if on else None,
+        "stream_path": f"vrcstream/{uid}"
+    })
 
 # ===== Pages =====
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", hls_base=HLS_BASE)
 
 @app.route("/admin")
 @admin_required
 def admin_page():
-    return render_template("admin.html")
+    return render_template("admin.html", hls_base=HLS_BASE)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=13333, debug=False)

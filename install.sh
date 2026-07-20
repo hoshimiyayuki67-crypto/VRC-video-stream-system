@@ -6,6 +6,12 @@ set -e
 # 适用系统: Ubuntu 20.04+ / Debian 11+
 # ============================================================
 
+# 检查 root 权限
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "\033[0;31m❌ 请使用 root 权限运行此脚本: sudo ./install.sh\033[0m"
+    exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="/opt/video_app"
 DATA_DIR="/home/yuki/vd"
@@ -133,7 +139,7 @@ cp "$SCRIPT_DIR/app/app.py" $APP_DIR/
 cp "$SCRIPT_DIR/app/templates/index.html" $APP_DIR/templates/
 cp "$SCRIPT_DIR/app/templates/admin.html" $APP_DIR/templates/
 
-# 修改端口 (如果非默认)
+# 修改端口 (如果非默认) — 精确匹配 app.run 中的 port=13333
 if [ "$WEB_PORT" != "13333" ]; then
     sed -i "s/port=13333/port=$WEB_PORT/" $APP_DIR/app.py
 fi
@@ -141,13 +147,14 @@ fi
 # 初始化数据库（创建管理员账号）
 cd $APP_DIR
 python3 -c "
-import os, sqlite3, hashlib
+import os, sqlite3, hashlib, secrets
 os.makedirs('$DATA_DIR', exist_ok=True)
 db = sqlite3.connect('$DATA_DIR/users.db')
-db.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, role TEXT DEFAULT \'user\', created_at TEXT DEFAULT (datetime(\'now\',\'localtime\')))')
+db.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, uid TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL, salt TEXT, role TEXT DEFAULT \'user\', created_at TEXT DEFAULT (datetime(\'now\',\'localtime\')))')
 db.execute('CREATE TABLE IF NOT EXISTS invite_codes (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT UNIQUE NOT NULL, created_by TEXT NOT NULL, expires_at TEXT NOT NULL, used_by TEXT, used_at TEXT)')
-pw_hash = hashlib.sha256('$ADMIN_PW'.encode()).hexdigest()
-db.execute('INSERT OR IGNORE INTO users (uid, password_hash, role) VALUES (?, ?, \'admin\')', ('$ADMIN_UID', pw_hash))
+salt = secrets.token_hex(16)
+pw_hash = hashlib.pbkdf2_hmac('sha256', '$ADMIN_PW'.encode(), salt.encode(), 100000).hex()
+db.execute('INSERT OR IGNORE INTO users (uid, password_hash, salt, role) VALUES (?, ?, ?, \'admin\')', ('$ADMIN_UID', pw_hash, salt))
 db.commit()
 db.close()
 print('管理员账号已创建: $ADMIN_UID')

@@ -1,1 +1,10 @@
 *.log
+__pycache__/
+*.pyc
+build_temp/
+*.spec
+pywebview_app.py
+dist/
+secret_key
+*.db
+.DS_Store
