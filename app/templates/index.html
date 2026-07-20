@@ -123,7 +123,7 @@ input:focus { border-color:#667eea; }
 <div class="toast" id="toast"></div>
 
 <script>
-const HLS_BASE = "http://yukifn.xyz:8888/vrcstream";
+const HLS_BASE = window.location.protocol + "//" + window.location.hostname + ":8888/vrcstream";
 let currentStream = null;
 
 function showToast(msg, type) {

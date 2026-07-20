@@ -27,8 +27,8 @@ echo ""
 # ===================== 配置输入 =====================
 echo -e "${YELLOW}请配置以下信息：${NC}"
 
-read -p "服务器域名或IP [yukifn.xyz]: " DOMAIN
-DOMAIN=${DOMAIN:-yukifn.xyz}
+read -p "服务器域名或IP [localhost]: " DOMAIN
+DOMAIN=${DOMAIN:-localhost}
 
 read -p "网页管理端口 [13333]: " WEB_PORT
 WEB_PORT=${WEB_PORT:-13333}
@@ -133,11 +133,6 @@ cp "$SCRIPT_DIR/app/app.py" $APP_DIR/
 cp "$SCRIPT_DIR/app/templates/index.html" $APP_DIR/templates/
 cp "$SCRIPT_DIR/app/templates/admin.html" $APP_DIR/templates/
 
-# 修改配置
-sed -i "s/yukifn.xyz/$DOMAIN/g" $APP_DIR/app.py
-sed -i "s/yukifn.xyz/$DOMAIN/g" $APP_DIR/templates/index.html
-sed -i "s/yukifn.xyz/$DOMAIN/g" $APP_DIR/templates/admin.html
-
 # 修改端口 (如果非默认)
 if [ "$WEB_PORT" != "13333" ]; then
     sed -i "s/port=13333/port=$WEB_PORT/" $APP_DIR/app.py
@@ -183,7 +178,7 @@ WantedBy=multi-user.target
 SERVICEEOF
 
 # 视频管理Web服务
-cat > /etc/systemd/system/videostream.service << 'SERVICEEOF'
+cat > /etc/systemd/system/videostream.service << SERVICEEOF
 [Unit]
 Description=Video Stream Management Web App
 After=network.target mediamtx.service
@@ -195,6 +190,8 @@ WorkingDirectory=/opt/video_app
 Restart=always
 RestartSec=5
 User=root
+Environment="DOMAIN=$DOMAIN"
+Environment="HLS_PORT=$HLS_PORT"
 
 [Install]
 WantedBy=multi-user.target

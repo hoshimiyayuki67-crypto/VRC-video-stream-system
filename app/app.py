@@ -13,7 +13,7 @@ CORS(app, supports_credentials=True)
 BASE_DIR = "/home/yuki/vd"
 ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv", "flv", "wmv", "webm", "m4v"}
 MEDIAMTX_RTMP = "rtmp://127.0.0.1:1935/vrcstream"
-HLS_BASE = "http://yukifn.xyz:8888/vrcstream"
+HLS_BASE = f"http://{os.environ.get('DOMAIN', 'localhost')}:{os.environ.get('HLS_PORT', '8888')}/vrcstream"
 os.makedirs(BASE_DIR, exist_ok=True)
 
 streams = {}
