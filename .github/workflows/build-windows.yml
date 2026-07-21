@@ -27,7 +27,7 @@ jobs:
         run: |
           $binDir = "windows/bin"
           New-Item -ItemType Directory -Force -Path $binDir | Out-Null
-          Invoke-WebRequest -Uri "https://gitcode.com/GitHub_Trending/me/mediamtx/releases/download/v1.19.2/mediamtx_v1.19.2_windows_amd64.zip" -OutFile "mediamtx.zip" -UseBasicParsing
+          Invoke-WebRequest -Uri "https://github.com/bluenviron/mediamtx/releases/download/v1.19.2/mediamtx_v1.19.2_windows_amd64.zip" -OutFile "mediamtx.zip" -UseBasicParsing
           Expand-Archive -Path "mediamtx.zip" -DestinationPath $binDir -Force
           Remove-Item "mediamtx.zip" -Force
           Get-ChildItem $binDir -Recurse -Filter "mediamtx.exe" | Move-Item -Destination $binDir -Force
