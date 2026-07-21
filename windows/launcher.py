@@ -4,7 +4,7 @@ PyInstaller 打包入口: pyinstaller VRCStream.spec
 """
 import os, sys, threading, time, subprocess
 
-DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "VRCStream")
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # 必须在 import app 之前设置，确保数据库创建在正确位置
