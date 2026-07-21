@@ -39,8 +39,6 @@
 └── .github/workflows/         ← CI 自动构建 Windows EXE
 ```
 
-> Linux 和 Windows 版本各自独立，修改一方不影响另一方。
-
 ---
 
 ## 🐧 Linux 安装
