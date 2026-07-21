@@ -91,7 +91,7 @@ systemctl restart videostream # 重启 Web 服务
 
 - **首次启动**：自动进入设置向导，创建管理员账号
 - **后续启动**：正常登录页，输入已创建的账号密码
-- 数据存储在 `%LOCALAPPDATA%\VRCStream\`
+- 数据存储在 EXE 同目录下的 `data/` 文件夹，便携化设计
 
 ---
 
