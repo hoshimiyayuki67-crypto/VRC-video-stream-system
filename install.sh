@@ -108,7 +108,7 @@ else
     esac
     
     echo "  下载 MediaMTX v${MEDIAMTX_VERSION} (${MTX_ARCH})..."
-    wget -q "https://github.com/bluenviron/mediamtx/releases/download/v${MEDIAMTX_VERSION}/mediamtx_v${MEDIAMTX_VERSION}_linux_${MTX_ARCH}.tar.gz" -O mediamtx.tar.gz
+    wget -q "https://gitcode.com/GitHub_Trending/me/mediamtx/releases/download/v${MEDIAMTX_VERSION}/mediamtx_v${MEDIAMTX_VERSION}_linux_${MTX_ARCH}.tar.gz" -O mediamtx.tar.gz
     
     tar -xzf mediamtx.tar.gz
     rm mediamtx.tar.gz

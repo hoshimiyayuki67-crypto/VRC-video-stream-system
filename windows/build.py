@@ -25,10 +25,17 @@ launcher = '''\
 import os, sys, threading, time, subprocess
 
 if getattr(sys, 'frozen', False):
+    bundle_dir = sys._MEIPASS
     os.chdir(os.path.dirname(sys.executable))
+else:
+    bundle_dir = os.path.dirname(os.path.abspath(__file__))
 
 from app.app import app as flask_app
 import app.app as app_module
+
+# PyInstaller 打包后修正模板路径
+if getattr(sys, 'frozen', False):
+    flask_app.template_folder = os.path.join(bundle_dir, 'app', 'templates')
 
 DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "VRCStream")
 os.makedirs(DATA_DIR, exist_ok=True)
