@@ -46,7 +46,7 @@ systemctl restart videostream # 重启Web服务
 ## 目录结构
 
 ```
-/home/yuki/vd/
+/opt/video_data/
 ├── {用户ID1}/   ← 每个用户独立目录
 ├── {用户ID2}/
 └── users.db     ← 数据库

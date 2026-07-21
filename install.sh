@@ -14,7 +14,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_DIR="/opt/video_app"
-DATA_DIR="/home/yuki/vd"
+DATA_DIR="/opt/video_data"
 MEDIAMTX_DIR="/opt/mediamtx"
 MEDIAMTX_VERSION="1.19.2"
 
@@ -45,11 +45,15 @@ HLS_PORT=${HLS_PORT:-8888}
 read -p "RTMP推流端口 [1935]: " RTMP_PORT
 RTMP_PORT=${RTMP_PORT:-1935}
 
-read -p "管理员账号 [yukisama]: " ADMIN_UID
-ADMIN_UID=${ADMIN_UID:-yukisama}
+read -p "管理员账号 [admin]: " ADMIN_UID
+ADMIN_UID=${ADMIN_UID:-admin}
 
-read -p "管理员密码 [hoshimiya67]: " -s ADMIN_PW
-ADMIN_PW=${ADMIN_PW:-hoshimiya67}
+read -p "管理员密码: " -s ADMIN_PW
+if [ -z "$ADMIN_PW" ]; then
+    echo ""
+    echo -e "${RED}密码不能为空！${NC}"
+    exit 1
+fi
 echo ""
 
 echo ""

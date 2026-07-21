@@ -9,7 +9,7 @@ import html
 app = Flask(__name__)
 
 # 持久化 secret_key，避免重启后 session 失效
-SECRET_KEY_FILE = "/home/yuki/vd/secret_key"
+SECRET_KEY_FILE = "/opt/video_data/secret_key"
 def load_or_create_secret_key():
     try:
         with open(SECRET_KEY_FILE, "r") as f:
@@ -24,7 +24,7 @@ def load_or_create_secret_key():
 app.secret_key = load_or_create_secret_key()
 CORS(app, supports_credentials=True)
 
-BASE_DIR = "/home/yuki/vd"
+BASE_DIR = "/opt/video_data"
 ALLOWED_EXTENSIONS = {"mp4", "avi", "mov", "mkv", "flv", "wmv", "webm", "m4v"}
 MEDIAMTX_RTMP = "rtmp://127.0.0.1:1935/vrcstream"
 HLS_BASE = f"http://{os.environ.get('DOMAIN', 'localhost')}:{os.environ.get('HLS_PORT', '8888')}/vrcstream"
