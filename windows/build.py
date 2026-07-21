@@ -101,6 +101,7 @@ a = Analysis(
     datas=[
         ({repr(str(ROOT / 'app' / 'templates' / 'index.html'))}, 'app/templates'),
         ({repr(str(ROOT / 'app' / 'templates' / 'admin.html'))}, 'app/templates'),
+        ({repr(str(ROOT / 'app' / 'templates' / 'setup.html'))}, 'app/templates'),
         ({repr(str(mtx_cfg_dst))}, 'config'),
     ],
     hiddenimports=['app', 'app.app', 'flask', 'flask_cors', 'webview', 'sqlite3', 'html'],

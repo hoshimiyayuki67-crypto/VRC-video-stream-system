@@ -147,7 +147,49 @@ def e(text):
     """HTML 转义"""
     return html.escape(str(text), quote=True)
 
-# ===== Auth =====
+# ===== First-Run Setup (Windows / 无管理员时) =====
+@app.route("/api/setup/status")
+def setup_status():
+    db = get_db()
+    cur = db.execute("SELECT COUNT(*) as cnt FROM users")
+    count = cur.fetchone()["cnt"]
+    db.close()
+    return jsonify({"need_setup": count == 0})
+
+@app.route("/api/setup/init", methods=["POST"])
+def setup_init():
+    db = get_db()
+    cur = db.execute("SELECT COUNT(*) as cnt FROM users")
+    if cur.fetchone()["cnt"] > 0:
+        db.close()
+        return jsonify({"error": "Setup already completed"}), 403
+    d = request.get_json()
+    uid = d.get("uid", "").strip()
+    pw = d.get("password", "")
+    if not uid or len(uid) < 2 or len(uid) > 20:
+        db.close()
+        return jsonify({"error": "ID 2-20 chars"}), 400
+    if len(pw) < 6:
+        db.close()
+        return jsonify({"error": "Password min 6 chars"}), 400
+    pw_hash, pw_salt = hash_pw(pw)
+    db.execute("INSERT INTO users (uid, password_hash, salt, role) VALUES (?, ?, ?, 'admin')", (uid, pw_hash, pw_salt))
+    db.commit()
+    db.close()
+    user_dir(uid)
+    session["uid"] = uid
+    session["role"] = "admin"
+    return jsonify({"success": True, "uid": uid, "role": "admin"})
+
+@app.route("/setup")
+def setup_page():
+    db = get_db()
+    cur = db.execute("SELECT COUNT(*) as cnt FROM users")
+    count = cur.fetchone()["cnt"]
+    db.close()
+    if count > 0:
+        return "Setup already completed. <a href='/'>Go to login</a>"
+    return render_template("setup.html")
 @app.route("/api/auth/register", methods=["POST"])
 def register():
     d = request.get_json()

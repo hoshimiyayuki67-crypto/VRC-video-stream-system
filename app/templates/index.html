@@ -197,9 +197,14 @@ async function initApp(uid, role) {
   _refreshInterval = setInterval(loadVideos, 5000);
 }
 
-// Check session on load
+// Check if setup needed first, then check session
 (async function() {
   try {
+    const sr = await fetch('/api/setup/status');
+    if (sr.ok) {
+      const sd = await sr.json();
+      if (sd.need_setup) { location.href = '/setup'; return; }
+    }
     const r = await fetch('/api/auth/me');
     if (r.ok) { const d = await r.json(); if (d.uid) initApp(d.uid, d.role); }
   } catch(e) {}
