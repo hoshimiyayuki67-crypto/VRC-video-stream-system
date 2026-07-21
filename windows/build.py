@@ -24,11 +24,8 @@ launcher_dst = ROOT / "launcher.py"
 shutil.copy2(LAUNCHER, launcher_dst)
 print(f"[OK] Launcher: {launcher_dst}")
 
-# 复制 mediamtx 配置
-mtx_cfg_src = ROOT / "config" / "mediamtx.yml"
-mtx_cfg_dst = ROOT / "windows" / "mediamtx.yml"
-shutil.copy2(mtx_cfg_src, mtx_cfg_dst)
-print(f"[OK] MediaMTX config copied")
+# 复制 mediamtx 配置（已存在于 windows/）
+mtx_cfg = ROOT / "windows" / "mediamtx.yml"
 
 # PyInstaller spec
 templates_dir = ROOT / "app" / "templates"
@@ -44,7 +41,7 @@ a = Analysis(
         ({repr(str(templates_dir / 'index.html'))}, 'app/templates'),
         ({repr(str(templates_dir / 'admin.html'))}, 'app/templates'),
         ({repr(str(templates_dir / 'setup.html'))}, 'app/templates'),
-        ({repr(str(mtx_cfg_dst))}, 'config'),
+        ({repr(str(mtx_cfg))}, 'config'),
     ],
     hiddenimports=['app', 'app.app', 'flask', 'flask_cors', 'webview', 'sqlite3', 'html'],
     hookspath=[],

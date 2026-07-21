@@ -9,4 +9,3 @@ dist/
 secret_key
 *.db
 .DS_Store
-windows/mediamtx.yml

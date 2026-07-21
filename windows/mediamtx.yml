@@ -1,0 +1,35 @@
+# MediaMTX Configuration for Video Stream System
+logLevel: info
+logDestinations: [stdout]
+logFile: mediamtx.log
+
+# RTSP
+rtsp: true
+rtspAddress: :8554
+
+# RTMP
+rtmp: true
+rtmpAddress: :1935
+
+# HLS
+hls: true
+hlsAddress: :8888
+hlsAlwaysRemux: true
+hlsVariant: mpegts
+hlsSegmentCount: 7
+hlsSegmentDuration: 2s
+hlsAllowOrigins: ["*"]
+
+# WebRTC
+webrtc: true
+webrtcAddress: :8889
+webrtcAllowOrigins: ["*"]
+webrtcLocalUDPAddress: :8189
+
+# SRT
+srt: true
+srtAddress: :8890
+
+# Paths - allow dynamic paths for multi-user streaming
+paths:
+  all_others:

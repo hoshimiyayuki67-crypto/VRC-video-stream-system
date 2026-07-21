@@ -119,7 +119,7 @@ fi
 
 # 配置MediaMTX
 echo "  配置MediaMTX..."
-cp "$SCRIPT_DIR/config/mediamtx.yml" $MEDIAMTX_DIR/mediamtx.yml
+cp "$SCRIPT_DIR/linux/mediamtx.yml" $MEDIAMTX_DIR/mediamtx.yml
 # 更新端口配置
 sed -i "s/hlsAddress: :8888/hlsAddress: :$HLS_PORT/" $MEDIAMTX_DIR/mediamtx.yml
 sed -i "s/rtmpAddress: :1935/rtmpAddress: :$RTMP_PORT/" $MEDIAMTX_DIR/mediamtx.yml
@@ -142,6 +142,7 @@ echo -e "${BLUE}[5/7] 部署应用...${NC}"
 cp "$SCRIPT_DIR/app/app.py" $APP_DIR/
 cp "$SCRIPT_DIR/app/templates/index.html" $APP_DIR/templates/
 cp "$SCRIPT_DIR/app/templates/admin.html" $APP_DIR/templates/
+cp "$SCRIPT_DIR/app/templates/setup.html" $APP_DIR/templates/
 
 # 修改端口 (如果非默认) — 精确匹配 app.run 中的 port=13333
 if [ "$WEB_PORT" != "13333" ]; then
