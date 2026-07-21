@@ -6,10 +6,10 @@ Windows GUI 构建脚本
 import os, sys, subprocess, shutil
 from pathlib import Path
 
-ROOT = Path(__file__).parent.parent
-DIST = Path(__file__).parent / "dist"
-BIN = Path(__file__).parent / "bin"
-LAUNCHER = Path(__file__).parent / "launcher.py"
+ROOT = Path(__file__).resolve().parent.parent
+DIST = Path(__file__).resolve().parent / "dist"
+BIN = Path(__file__).resolve().parent / "bin"
+LAUNCHER = Path(__file__).resolve().parent / "launcher.py"
 
 DIST.mkdir(parents=True, exist_ok=True)
 
