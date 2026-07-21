@@ -3,7 +3,7 @@ Windows GUI 构建脚本
 使用 PyInstaller 将 Flask 应用 + 启动器打包为 EXE
 运行方式: cd windows && python build.py
 """
-import os, sys, subprocess, shutil
+import os, sys, subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -21,7 +21,9 @@ if not (BIN / "mediamtx.exe").exists():
 
 # 复制 launcher 到项目根（PyInstaller 需要从此处解析 app 模块）
 launcher_dst = ROOT / "launcher.py"
-shutil.copy2(LAUNCHER, launcher_dst)
+with open(LAUNCHER, "r", encoding="utf-8") as src:
+    with open(launcher_dst, "w", encoding="utf-8") as dst:
+        dst.write(src.read())
 print(f"[OK] Launcher: {launcher_dst}")
 
 # 复制 mediamtx 配置（已存在于 windows/）
