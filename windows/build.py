@@ -128,7 +128,6 @@ subprocess.run([
     sys.executable, "-m", "PyInstaller",
     "--distpath", str(DIST),
     "--workpath", str(ROOT / "build_temp"),
-    "--specpath", str(ROOT),
     "--clean", "--noconfirm",
     str(spec_path)
 ], check=True, cwd=str(ROOT))
