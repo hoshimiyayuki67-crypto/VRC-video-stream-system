@@ -139,10 +139,10 @@ echo ""
 echo -e "${BLUE}[5/7] 部署应用...${NC}"
 
 # 复制应用文件
-cp "$SCRIPT_DIR/app/app.py" $APP_DIR/
-cp "$SCRIPT_DIR/app/templates/index.html" $APP_DIR/templates/
-cp "$SCRIPT_DIR/app/templates/admin.html" $APP_DIR/templates/
-cp "$SCRIPT_DIR/app/templates/setup.html" $APP_DIR/templates/
+cp "$SCRIPT_DIR/linux/app/app.py" $APP_DIR/
+cp "$SCRIPT_DIR/linux/app/templates/index.html" $APP_DIR/templates/
+cp "$SCRIPT_DIR/linux/app/templates/admin.html" $APP_DIR/templates/
+cp "$SCRIPT_DIR/linux/app/templates/setup.html" $APP_DIR/templates/
 
 # 修改端口 (如果非默认) — 精确匹配 app.run 中的 port=13333
 if [ "$WEB_PORT" != "13333" ]; then

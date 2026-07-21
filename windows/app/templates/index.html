@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频推流系统</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; background:#0f0f1a; color:#e0e0e0; min-height:100vh; }
+.container { max-width:800px; margin:0 auto; padding:20px; }
+.card { background:#1a1a2e; border-radius:12px; padding:24px; margin-bottom:20px; border:1px solid #2a2a4a; }
+.card h2 { font-size:18px; margin-bottom:16px; color:#ccc; }
+input { width:100%; padding:10px 14px; background:#16162a; border:1px solid #333; border-radius:6px; color:#fff; font-size:14px; margin-bottom:12px; outline:none; transition:border .2s; }
+input:focus { border-color:#667eea; }
+.btn { padding:10px 24px; border:none; border-radius:6px; cursor:pointer; font-size:14px; font-weight:500; transition:all .2s; display:inline-block; }
+.btn-primary { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+.btn-primary:hover { opacity:.85; transform:translateY(-1px); }
+.btn-stream { background:linear-gradient(135deg,#f093fb,#f5576c); color:#fff; }
+.btn-stream:hover { opacity:.85; transform:translateY(-1px); }
+.btn-stream.active { background:linear-gradient(135deg,#4ade80,#22c55e); }
+.btn-del { background:transparent; color:#666; border:1px solid #333; padding:6px 12px; border-radius:6px; cursor:pointer; }
+.btn-del:hover { background:#2a1a1a; color:#ff6b6b; border-color:#5a2a2a; }
+.btn-sm { padding:6px 14px; font-size:12px; }
+.tabs { display:flex; gap:0; margin-bottom:20px; background:#16162a; border-radius:8px; overflow:hidden; border:1px solid #252545; }
+.tab { flex:1; padding:12px; text-align:center; cursor:pointer; color:#888; transition:all .2s; font-size:14px; }
+.tab.active { background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; }
+.tab:hover:not(.active) { color:#ccc; }
+.hidden { display:none !important; }
+.video-item { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:#16162a; border-radius:8px; margin-bottom:8px; border:1px solid #252545; }
+.video-info .name { font-size:14px; color:#ddd; }
+.video-info .meta { font-size:12px; color:#888; margin-top:3px; }
+.video-actions { display:flex; gap:6px; }
+.status-bar { display:flex; align-items:center; gap:10px; padding:12px 14px; background:#16162a; border-radius:8px; border:1px solid #252545; }
+.status-dot { width:10px; height:10px; border-radius:50%; background:#666; }
+.status-dot.active { background:#4ade80; box-shadow:0 0 8px rgba(74,222,128,0.4); }
+.status-text { font-size:14px; color:#aaa; }
+.stream-url { font-size:12px; color:#667eea; word-break:break-all; cursor:pointer; }
+.empty-state { text-align:center; padding:30px; color:#666; }
+.empty-state .icon { font-size:40px; margin-bottom:8px; }
+.toast { position:fixed; bottom:20px; right:20px; padding:12px 20px; border-radius:8px; color:#fff; font-size:14px; z-index:999; display:none; animation:fadeIn .3s; }
+.toast.success { background:#22c55e; }
+.toast.error { background:#ef4444; }
+.toast.info { background:#667eea; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+.stream-badge { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; background:rgba(74,222,128,0.15); color:#4ade80; margin-left:8px; }
+.upload-area { border:2px dashed #3a3a5a; border-radius:10px; padding:30px; text-align:center; cursor:pointer; transition:all .3s; margin-bottom:16px; }
+.upload-area:hover { border-color:#667eea; background:rgba(102,126,234,0.05); }
+.upload-area .icon { font-size:32px; }
+.upload-area p { color:#aaa; margin-top:8px; font-size:13px; }
+.upload-area input[type="file"] { display:none; }
+.progress-bar { height:4px; background:#2a2a4a; border-radius:2px; overflow:hidden; margin:8px 0; }
+.progress-bar div { height:100%; background:linear-gradient(90deg,#667eea,#764ba2); width:0%; transition:width .3s; }
+.header-bar { display:flex; justify-content:space-between; align-items:center; padding:10px 0; margin-bottom:10px; }
+.header-bar .user-info { font-size:13px; color:#888; }
+.header-bar .logout-btn { font-size:12px; color:#ff6b6b; cursor:pointer; background:none; border:none; }
+.header-bar .logout-btn:hover { text-decoration:underline; }
+.link-btn { background:none; border:none; color:#667eea; cursor:pointer; font-size:13px; padding:0; }
+.link-btn:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="container">
+<div id="loginPage">
+  <div class="card" style="max-width:400px;margin:60px auto;">
+    <h2 style="text-align:center;font-size:22px;background:linear-gradient(135deg,#667eea,#764ba2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">🎬 视频推流系统</h2>
+    <p style="text-align:center;color:#888;margin-bottom:20px;font-size:13px;">登录您的账号</p>
+    <div class="tabs">
+      <div class="tab active" onclick="showAuthTab('login')">登录</div>
+      <div class="tab" onclick="showAuthTab('register')">注册</div>
+    </div>
+    <div id="loginForm">
+      <input type="text" id="loginUid" placeholder="账号ID">
+      <input type="password" id="loginPw" placeholder="密码">
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">登 录</button>
+    </div>
+    <div id="registerForm" class="hidden">
+      <input type="text" id="regUid" placeholder="账号ID（2-20个字符）">
+      <input type="password" id="regPw" placeholder="密码（至少6位）">
+      <input type="text" id="regCode" placeholder="邀请码">
+      <button class="btn btn-primary" style="width:100%" onclick="doRegister()">注 册</button>
+    </div>
+  </div>
+</div>
+
+<div id="mainPage" class="hidden">
+  <div class="header-bar">
+    <div class="user-info">👤 <span id="userDisplay"></span></div>
+    <div>
+      <button class="link-btn" id="adminBtn" onclick="location.href='/admin'" style="display:none;margin-right:12px;">⚙️ 管理</button>
+      <button class="logout-btn" onclick="doLogout()">退出登录</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📋 推流状态</h2>
+    <div class="status-bar" id="statusBar">
+      <div class="status-dot" id="statusDot"></div>
+      <span class="status-text" id="statusText">当前无推流</span>
+      <span class="stream-url" id="streamUrl" onclick="copyStreamUrl()"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>📤 上传视频</h2>
+    <div class="upload-area" id="uploadArea">
+      <div class="icon">📁</div>
+      <p><strong>点击选择</strong> 或拖拽视频文件到此处</p>
+      <input type="file" id="fileInput" accept="video/*">
+    </div>
+    <div id="uploadProgress" class="hidden">
+      <div class="progress-bar"><div id="progressFill"></div></div>
+      <p style="font-size:12px;color:#888;text-align:center;" id="progressText"></p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🎞️ 我的视频</h2>
+    <div id="videoList"><div class="empty-state"><div class="icon">🎥</div><p>暂无视频</p></div></div>
+  </div>
+</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// 从服务端注入（Jinja2 模板变量）
+const HLS_BASE = "{{ hls_base|safe }}";
+let currentStream = null;
+let currentUid = null;      // 当前登录用户 UID（不从 DOM 解析）
+let currentRole = null;
+let _refreshInterval = null; // 防止重复 setInterval
+
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type;
+  t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3000);
+}
+
+function showAuthTab(tab) {
+  document.querySelectorAll('.tabs .tab').forEach(e => e.classList.remove('active'));
+  document.getElementById('loginForm').classList.add('hidden');
+  document.getElementById('registerForm').classList.add('hidden');
+  if (tab === 'login') {
+    document.querySelector('.tabs .tab:first-child').classList.add('active');
+    document.getElementById('loginForm').classList.remove('hidden');
+  } else {
+    document.querySelector('.tabs .tab:last-child').classList.add('active');
+    document.getElementById('registerForm').classList.remove('hidden');
+  }
+}
+
+async function doLogin() {
+  const uid = document.getElementById('loginUid').value.trim();
+  const pw = document.getElementById('loginPw').value;
+  if (!uid || !pw) { showToast('请填写完整', 'error'); return; }
+  try {
+    const r = await fetch('/api/auth/login', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid,password:pw})});
+    const d = await r.json();
+    if (d.success) { showToast('登录成功！', 'success'); initApp(d.uid, d.role); }
+    else showToast(d.error, 'error');
+  } catch(e) { showToast('网络错误', 'error'); }
+}
+
+async function doRegister() {
+  const uid = document.getElementById('regUid').value.trim();
+  const pw = document.getElementById('regPw').value;
+  const code = document.getElementById('regCode').value.trim();
+  if (!uid || !pw || !code) { showToast('请填写完整', 'error'); return; }
+  try {
+    const r = await fetch('/api/auth/register', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({uid,password:pw,invite_code:code})});
+    const d = await r.json();
+    if (d.success) { showToast('注册成功！请登录', 'success'); showAuthTab('login'); }
+    else showToast(d.error, 'error');
+  } catch(e) { showToast('网络错误', 'error'); }
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', {method:'POST'});
+  document.getElementById('mainPage').classList.add('hidden');
+  document.getElementById('loginPage').classList.remove('hidden');
+  if (_refreshInterval) { clearInterval(_refreshInterval); _refreshInterval = null; }
+  currentUid = null;
+  currentRole = null;
+  showToast('已退出', 'info');
+}
+
+async function initApp(uid, role) {
+  currentUid = uid;
+  currentRole = role;
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  document.getElementById('userDisplay').textContent = uid + (role === 'admin' ? ' (管理员)' : '');
+  if (role === 'admin') document.getElementById('adminBtn').style.display = 'inline';
+  loadVideos();
+  // 清除旧定时器，防止内存泄漏
+  if (_refreshInterval) clearInterval(_refreshInterval);
+  _refreshInterval = setInterval(loadVideos, 5000);
+}
+
+// Check if setup needed first, then check session
+(async function() {
+  try {
+    const sr = await fetch('/api/setup/status');
+    if (sr.ok) {
+      const sd = await sr.json();
+      if (sd.need_setup) { location.href = '/setup'; return; }
+    }
+    const r = await fetch('/api/auth/me');
+    if (r.ok) { const d = await r.json(); if (d.uid) initApp(d.uid, d.role); }
+  } catch(e) {}
+})();
+
+// Upload
+document.getElementById('uploadArea').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', () => { if (document.getElementById('fileInput').files.length) handleUpload(document.getElementById('fileInput').files[0]); });
+
+function handleUpload(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['mp4','avi','mov','mkv','flv','wmv','webm','m4v'].includes(ext)) { showToast('不支持格式', 'error'); return; }
+  document.getElementById('uploadProgress').classList.remove('hidden');
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('progressText').textContent = '0%';
+  const fd = new FormData();
+  fd.append('file', file);
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/upload', true);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded/e.total*100); document.getElementById('progressFill').style.width = p+'%'; document.getElementById('progressText').textContent = p+'%'; } };
+  xhr.onload = function() {
+    document.getElementById('uploadProgress').classList.add('hidden');
+    if (xhr.status === 200) { showToast('上传成功', 'success'); loadVideos(); }
+    else { try { showToast(JSON.parse(xhr.responseText).error || '上传失败', 'error'); } catch(e) { showToast('上传失败', 'error'); } }
+  };
+  xhr.onerror = function() { document.getElementById('uploadProgress').classList.add('hidden'); showToast('网络错误', 'error'); };
+  xhr.send(fd);
+}
+
+async function loadVideos() {
+  try {
+    const r = await fetch('/api/videos');
+    const d = await r.json();
+    currentStream = d.current_stream;
+    renderVideos(d.videos);
+    updateStatus(d.current_stream);
+  } catch(e) {}
+}
+
+function renderVideos(videos) {
+  const el = document.getElementById('videoList');
+  if (!videos || videos.length === 0) { el.innerHTML = '<div class="empty-state"><div class="icon">🎥</div><p>暂无视频</p></div>'; return; }
+  let h = '';
+  videos.forEach(v => {
+    const isCur = v.name === currentStream;
+    // name_escaped 已由服务端 HTML 转义，安全拼接
+    const safeName = v.name_escaped || v.name;
+    const safeSize = v.size || '';
+    const safeModified = v.modified || '';
+    h += '<div class="video-item"><div class="video-info"><div class="name">' + safeName + (isCur?'<span class="stream-badge">正在推流</span>':'') + '</div><div class="meta">' + safeSize + ' · ' + safeModified + '</div></div><div class="video-actions">';
+    if (isCur) h += '<button class="btn btn-stream active btn-sm" onclick="stopStream()">⏹ 停止</button>';
+    else h += '<button class="btn btn-stream btn-sm" onclick="startStream(\'' + safeName.replace(/'/g,"\\'") + '\')">📡 推流</button>';
+    h += '<button class="btn-del btn-sm" onclick="deleteVideo(\'' + safeName.replace(/'/g,"\\'") + '\')">🗑</button></div></div>';
+  });
+  el.innerHTML = h;
+}
+
+async function startStream(fn) {
+  showToast('启动推流...', 'info');
+  try {
+    const r = await fetch('/api/stream/start', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn})});
+    const d = await r.json();
+    if (d.success) { showToast('🎉 推流已开始！', 'success'); loadVideos(); updateStatus(fn); }
+    else showToast(d.error, 'error');
+  } catch(e) { showToast('错误', 'error'); }
+}
+
+async function stopStream() {
+  await fetch('/api/stream/stop', {method:'POST'});
+  loadVideos(); updateStatus(null);
+  showToast('⏹ 已停止', 'info');
+}
+
+async function deleteVideo(fn) {
+  if (!confirm('删除 "' + fn + '" ？')) return;
+  await fetch('/api/delete', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:fn})});
+  loadVideos();
+}
+
+function copyStreamUrl() {
+  const el = document.getElementById('streamUrl');
+  const url = el.textContent.replace('📺 ', '').trim();
+  if (url && url.startsWith('http')) {
+    navigator.clipboard.writeText(url).then(() => {
+      showToast('📋 已复制直播地址！', 'success');
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('📋 已复制直播地址！', 'success');
+    });
+  }
+}
+
+function updateStatus(sn) {
+  if (sn) {
+    document.getElementById('statusDot').className = 'status-dot active';
+    document.getElementById('statusText').textContent = '正在推流: ' + sn;
+    document.getElementById('streamUrl').textContent = '📺 ' + HLS_BASE + '/' + currentUid + '/index.m3u8';
+  } else {
+    document.getElementById('statusDot').className = 'status-dot inactive';
+    document.getElementById('statusText').textContent = '当前无推流';
+    document.getElementById('streamUrl').textContent = '';
+  }
+}
+</script>
+</body>
+</html>

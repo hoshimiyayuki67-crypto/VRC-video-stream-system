@@ -28,7 +28,7 @@ print(f"[OK] Launcher: {launcher_dst}")
 mtx_cfg = ROOT / "windows" / "mediamtx.yml"
 
 # PyInstaller spec
-templates_dir = ROOT / "app" / "templates"
+templates_dir = ROOT / "windows" / "app" / "templates"
 spec = f"""# -*- mode: python -*-
 a = Analysis(
     [{repr(str(launcher_dst))}],
@@ -43,7 +43,7 @@ a = Analysis(
         ({repr(str(templates_dir / 'setup.html'))}, 'app/templates'),
         ({repr(str(mtx_cfg))}, 'config'),
     ],
-    hiddenimports=['app', 'app.app', 'flask', 'flask_cors', 'webview', 'sqlite3', 'html'],
+    hiddenimports=['windows.app', 'windows.app.app', 'flask', 'flask_cors', 'webview', 'sqlite3', 'html'],
     hookspath=[],
     hooksconfig={{}},
     runtime_hooks=[],
