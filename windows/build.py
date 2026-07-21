@@ -65,7 +65,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
-    icon=None,
+    icon={repr(str(ROOT / 'windows' / 'icon.ico'))},
 )
 """
 
