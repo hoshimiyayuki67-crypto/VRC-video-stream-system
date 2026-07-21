@@ -24,6 +24,12 @@ if not mediamtx_exe.exists():
 launcher = '''\
 import os, sys, threading, time, subprocess
 
+DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "VRCStream")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+# 必须在 import app 之前设置，确保数据库和所有文件创建在正确位置
+os.environ["VRC_DATA_DIR"] = DATA_DIR
+
 if getattr(sys, 'frozen', False):
     bundle_dir = sys._MEIPASS
     os.chdir(os.path.dirname(sys.executable))
@@ -31,15 +37,10 @@ else:
     bundle_dir = os.path.dirname(os.path.abspath(__file__))
 
 from app.app import app as flask_app
-import app.app as app_module
 
 # PyInstaller 打包后修正模板路径
 if getattr(sys, 'frozen', False):
     flask_app.template_folder = os.path.join(bundle_dir, 'app', 'templates')
-
-DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "VRCStream")
-os.makedirs(DATA_DIR, exist_ok=True)
-app_module.BASE_DIR = DATA_DIR
 
 BASE = os.path.dirname(os.path.abspath(sys.argv[0]))
 MTX = os.path.join(BASE, "bin", "mediamtx.exe")
